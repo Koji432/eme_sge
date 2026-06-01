@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>iOS ロック画面風 緊急モード</title>
+    <style>
+        /* 全体の基本設定 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+            background-color: #000;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        /* 画面の共通設定 */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+        }
+
+        /* ロック画面の背景 */
+        #lock-screen {
+            background: linear-gradient(to bottom, #4a90e2, #50e3c2);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 15px;
+        }
+
+            /* ロック画面解除時の動き */
+            #lock-screen.unlocked {
+                transform: translateY(-100%);
+            }
+
+        /* --- ロック解除後（アイテム画面）の設定 --- */
+        #items-screen {
+            background-color: #f2f2f7;
+            z-index: 5;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .app-header {
+            background-color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 50px 20px 15px 20px;
+            border-bottom: 1px solid #c6c6c8;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        .app-title {
+            font-size: 34px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: 0.5px;
+        }
+
+        .item-list {
+            padding: 20px;
+            padding-bottom: 80px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .item-card {
+            background-color: #fff;
+            border-radius: 14px;
+            padding: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+            .item-card h2 {
+                margin: 0 0 10px 0;
+                font-size: 17px;
+                font-weight: 600;
+                color: #000;
+            }
+
+            .item-card img {
+                width: 100%;
+                height: auto;
+                border-radius: 8px;
+                display: block;
+            }
+
+        /* --- ステータスバーと上部UI --- */
+        .status-bar {
+            width: 100%;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+
+        .lock-icon {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .date {
+            font-size: 22px;
+            font-weight: 500;
+            color: #fff;
+            margin-bottom: -10px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .time {
+            font-size: 96px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 20px;
+            letter-spacing: -2px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        /* --- 通知デザイン --- */
+        .notification-container {
+            width: 90%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 5;
+        }
+
+        .notification {
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 20px;
+            padding: 15px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .notification-title {
+            color: #000;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+            .notification-title .icon-app {
+                background: #ff3b30;
+                width: 16px;
+                height: 16px;
+                border-radius: 4px;
+                display: inline-block;
+            }
+
+            .notification-title.orange .icon-app {
+                background: #ff9500;
+            }
+
+        .notification-body {
+            font-size: 15px;
+            color: #000;
+            line-height: 1.3;
+        }
+
+        /* --- クイックアクションUI --- */
+        .quick-actions {
+            position: absolute;
+            bottom: 120px; /* 少し上に上げました */
+            width: 85%;
+            display: flex;
+            justify-content: space-between;
+            z-index: 5;
+        }
+
+        .action-btn {
+            width: 50px;
+            height: 50px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: white;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        /* --- ホームインジケーターとスワイプ誘導UI --- */
+        .home-indicator-area {
+            position: absolute;
+            bottom: 15px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 20;
+        }
+
+        /* 矢印をさらに大きく太く変更 */
+        .swipe-arrow {
+            width: 100px;
+            height: 100px;
+            border-top: 4px solid rgba(255, 255, 255, 0.9);
+            border-right: 4px solid rgba(255, 255, 255, 0.9);
+            transform: rotate(-45deg);
+            margin-bottom: 12px;
+            animation: bounceUpHeavy 2s infinite;
+        }
+
+        /* テキストを大きく強調 */
+        .swipe-text {
+            font-size: 18px; /* 14pxから18pxに拡大 */
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+
+        /* 跳ねる動きをより大きく */
+        @keyframes bounceUpHeavy {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0) rotate(-45deg);
+                opacity: 0.6;
+            }
+
+            40% {
+                transform: translateY(-15px) rotate(-45deg); /* 高く跳ねる */
+                opacity: 1;
+            }
+
+            60% {
+                transform: translateY(-7px) rotate(-45deg);
+                opacity: 1;
+            }
+        }
+
+        .home-indicator {
+            width: 140px;
+            height: 5px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="lock-screen" class="screen">
+        <div class="status-bar">
+            <span>圏外</span>
+            <span>1% 🔋</span>
+        </div>
+
+        <div class="lock-icon">🔒</div>
+        <div id="current-date" class="date"></div>
+        <div id="current-time" class="time"></div>
+
+        <div class="notification-container">
+            <div class="notification">
+                <div class="notification-header">
+                    <span class="notification-title"><span class="icon-app"></span> 緊急速報</span>
+                    <span>今</span>
+                </div>
+                <div class="notification-body">
+                    原因不明の大災害が発生しました。注意してください。
+                </div>
+            </div>
+
+            <div class="notification">
+                <div class="notification-header">
+                    <span class="notification-title orange"><span class="icon-app"></span> お知らせ</span>
+                    <span>今</span>
+                </div>
+                <div class="notification-body">
+                    救助が来るのはあと三か月後です。
+                </div>
+            </div>
+        </div>
+
+        <div class="quick-actions">
+            <div class="action-btn">🔦</div>
+            <div class="action-btn">📷</div>
+        </div>
+
+        <div class="home-indicator-area">
+            <div class="swipe-arrow"></div>
+            <div class="swipe-text">上にスワイプして開く</div>
+            <div class="home-indicator"></div>
+        </div>
+    </div>
+
+    <div id="items-screen" class="screen">
+        <div class="app-header">
+            <h1 class="app-title">【所持しているアイテム】</h1>
+        </div>
+        <div class="item-list">
+            <div class="item-card">
+                <h2>ストマスのアイテム</h2>
+                <img src="gennsyoku.png" alt="ストマス">
+            </div>
+
+            <div class="item-card">
+                <h2>現職のアイテム</h2>
+                <img src="sutomasu.png" alt="現職">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateClock() {
+            const now = new Date();
+            const months = now.getMonth() + 1;
+            const date = now.getDate();
+            const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
+            document.getElementById('current-date').textContent = `${months}月${date}日(${dayOfWeek})`;
+
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('current-time').textContent = `${hours}:${minutes}`;
+        }
+
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        const lockScreen = document.getElementById('lock-screen');
+        let startY = 0;
+        let currentY = 0;
+
+        lockScreen.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+        });
+
+        lockScreen.addEventListener('touchmove', (e) => {
+            currentY = e.touches[0].clientY;
+        }, { passive: false });
+
+        lockScreen.addEventListener('touchend', (e) => {
+            if (startY === 0 || currentY === 0) return;
+            let diffY = startY - currentY;
+            if (diffY > 50) {
+                lockScreen.classList.add('unlocked');
+                document.querySelector('.lock-icon').textContent = '🔓';
+            }
+            startY = 0;
+            currentY = 0;
+        });
+    </script>
+</body>
+</html>
